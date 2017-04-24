@@ -2,19 +2,29 @@
   sudo: yes
 
   vars:
-    elasticsearch_version: 2.2.0
-    kibana_version: 4.4.0
-    packetbeat_version: 1.1.0
-    topbeat_version: 1.1.0
-    filebeat_version: 1.1.0
+    elasticsearch_version: 5.3.1
+    kibana_version: 5.3.1
+    packetbeat_version: 5.3.1
+    topbeat_version: 1.3.1
+    filebeat_version: 5.3.1
     beats_dashboards_version: 1.1.0
 
   tasks:
+    - name: "pexpectのインストール"
+      shell: cd /tmp && wget https://bootstrap.pypa.io/get-pip.py && python get-pip.py && pip install pexpect
+      
+    - name: "PPAを追加する"
+      shell: add-apt-repository ppa:openjdk-r/ppa && apt-get update
     - name: "OpenJDKとunzipをインストール"
       apt: name={{ item }} install_recommends=False update_cache=yes cache_valid_time=300
       with_items:
-        - openjdk-7-jre-headless
+        - openjdk-8-jre-headless
         - unzip
+    - name: "使用するJava VMを切り替える"
+      expect:
+        command: update-alternatives --config java
+        responses:
+          "Press enter to keep the current choice\\[\\*\\], or type selection number:" : "2"
 
     - name: "ダウンロードするファイルのリストを転送"
       template: src=templates/get_urls.txt dest=/tmp/ mode=755
@@ -25,26 +35,28 @@
     - name: "Elasticsearchをdebパッケージからインストール"
       apt: deb=/tmp/elasticsearch-{{ elasticsearch_version }}.deb
     - name: "Packetbeatをdebパッケージからインストール"
-      apt: deb=/tmp/packetbeat_{{ packetbeat_version }}_amd64.deb
+      apt: deb=/tmp/packetbeat-{{ packetbeat_version }}-amd64.deb
     - name: "Topbeatをdebパッケージからインストール"
       apt: deb=/tmp/topbeat_{{ topbeat_version }}_amd64.deb
     - name: "Filebeatをdebパッケージからインストール"
-      apt: deb=/tmp/filebeat_{{ filebeat_version }}_amd64.deb
+      apt: deb=/tmp/filebeat-{{ filebeat_version }}-amd64.deb
 
     - name: "Elasticsearchを起動してサービスを有効化"
       service: name=elasticsearch state=started enabled=yes
     - name: "Elasticsearchの起動を待つ"
       wait_for: port=9200
 
-    - name: "Kibana4のアーカイブを展開"
-      unarchive: copy=no src=/tmp/kibana-{{ kibana_version }}-linux-x64.tar.gz dest=/opt
-    - name: "Kibana4の起動スクリプトを転送"
-      template: src=templates/kibana.initscript dest=/etc/init.d/kibana mode=755
+    - name: "Kibanaをdebパッケージからインストール"
+      apt: deb=/tmp/kibana-{{ kibana_version }}-amd64.deb
+#   - name: "Kibana5のアーカイブを展開"
+#     unarchive: copy=no src=/tmp/kibana-{{ kibana_version }}-linux-x64.tar.gz dest=/opt
+#   - name: "Kibana5の起動スクリプトを転送"
+#     template: src=templates/kibana.initscript dest=/etc/init.d/kibana mode=755
     - name: "Senseをインストール"
-      shell: cd /opt/kibana-{{ kibana_version }}-linux-x64 && ./bin/kibana plugin --install elastic/sense
+      shell: cd /usr/share/kibana/ && ./bin/kibana plugin --install elastic/sense
     - name: "Timelionをインストール"
-      shell: cd /opt/kibana-{{ kibana_version }}-linux-x64 && ./bin/kibana plugin --install kibana/timelion
-    - name: "Kibana4を起動してサービスを有効化"
+      shell: cd /usr/share/kibana/ && ./bin/kibana plugin --install kibana/timelion
+    - name: "Kibana5を起動してサービスを有効化"
       service: name=kibana state=started enabled=yes
 
     - name: "テストデータshakespeareのマッピングを転送"
